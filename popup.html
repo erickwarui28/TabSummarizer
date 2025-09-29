@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TabSummarizer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h2>🗂️ TabSummarizer</h2>
+      <p class="subtitle">Turn tab chaos into clear insights</p>
+    </div>
+    
+    <div class="controls">
+      <button id="summarize" class="primary-btn">
+        <span class="btn-text">Summarize Tabs</span>
+        <span class="loading" style="display: none;">Summarizing...</span>
+      </button>
+      
+      <div class="tab-count" id="tab-count"></div>
+    </div>
+    
+    <div class="search-section" style="display: none;">
+      <input type="text" id="search-input" placeholder="Search tabs with natural language..." />
+      <button id="search-btn" class="secondary-btn">Search</button>
+    </div>
+    
+    <div id="output" class="output-container"></div>
+    
+    <div class="footer">
+      <small>Powered by Chrome's built-in AI</small>
+    </div>
+    
+    <script src="popup.js"></script>
+  </body>
+</html>
