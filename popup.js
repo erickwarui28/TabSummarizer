@@ -47,7 +47,7 @@ class TabSummarizer {
     button.disabled = true;
     buttonText.style.display = 'none';
     loading.style.display = 'flex';
-    output.innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Processing tabs...</div>';
+    output.innerHTML = '<div class="empty-state"><div class="icon">...</div>Processing tabs...</div>';
 
     try {
       const tabs = await chrome.tabs.query({});
@@ -69,7 +69,7 @@ class TabSummarizer {
         const progress = Math.min(i + batchSize, tabs.length);
         output.innerHTML = `
           <div class="empty-state">
-            <div class="icon">⏳</div>
+            <div class="icon">...</div>
             Processing ${progress} of ${tabs.length} tabs...
           </div>
         `;
@@ -314,7 +314,7 @@ class TabSummarizer {
       if (searchResults.length === 0) {
         output.innerHTML = `
           <div class="empty-state">
-            <div class="icon">🔍</div>
+            <div class="icon">[?]</div>
             No tabs found matching "${query}"
           </div>
         `;
@@ -334,7 +334,7 @@ class TabSummarizer {
     const output = document.getElementById('output');
     output.innerHTML = `
       <div class="empty-state">
-        <div class="icon">🗂️</div>
+        <div class="icon">[📁]</div>
         No tabs to summarize.<br>
         Open some tabs and try again!
       </div>
@@ -345,7 +345,7 @@ class TabSummarizer {
     const output = document.getElementById('output');
     output.innerHTML = `
       <div class="empty-state">
-        <div class="icon">❌</div>
+        <div class="icon">[!]</div>
         ${message}
       </div>
     `;
