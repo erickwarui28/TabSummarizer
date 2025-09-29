@@ -1,67 +1,10 @@
 // TabSummarizer Background Service Worker
 chrome.runtime.onInstalled.addListener(() => {
   console.log("TabSummarizer installed successfully!");
-  
-  // Set up context menu for quick access
-  chrome.contextMenus.create({
-    id: "summarize-current-tab",
-    title: "Summarize this tab",
-    contexts: ["page"]
-  });
 });
 
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "summarize-current-tab") {
-    try {
-      // Extract text from the current tab
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: extractPageText
-      });
-      
-      const pageText = results[0]?.result || '';
-      
-      if (!pageText.trim()) {
-        console.log('No text content found in this tab');
-        return;
-      }
-
-      // Try to use AI API for summarization
-      let summary = 'Unable to generate summary';
-      let betterTitle = tab.title;
-
-      try {
-        if (typeof ai !== 'undefined' && ai.summarizer) {
-          summary = await ai.summarizer.summarize(pageText, {
-            type: "key-points",
-            length: "short"
-          });
-        }
-      } catch (error) {
-        console.warn('AI API not available, using fallback');
-        summary = generateFallbackSummary(pageText);
-      }
-
-      // Show summary in a notification
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: 'Tab Summary',
-        message: summary.slice(0, 100) + (summary.length > 100 ? '...' : '')
-      });
-
-    } catch (error) {
-      console.error('Error summarizing tab:', error);
-    }
-  }
-});
-
-// Handle extension icon click
-chrome.action.onClicked.addListener(async (tab) => {
-  // This will open the popup, but we can also log for debugging
-  console.log('TabSummarizer icon clicked');
-});
+// Note: chrome.action.onClicked is not available when popup is defined in manifest
+// The popup will handle the icon click interaction
 
 // Listen for tab updates to potentially cache summaries
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -71,41 +14,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Utility function to extract page text
-function extractPageText() {
-  // Remove script and style elements
-  const scripts = document.querySelectorAll('script, style, nav, header, footer, aside');
-  scripts.forEach(el => el.remove());
-
-  // Get main content
-  const body = document.body;
-  if (!body) return '';
-
-  // Try to find main content area
-  const mainContent = document.querySelector('main, article, .content, #content, .post, .entry');
-  const contentElement = mainContent || body;
-
-  return contentElement.innerText
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 2000);
-}
-
-// Fallback summary generator
-function generateFallbackSummary(text) {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
-  if (sentences.length === 0) return 'No readable content found';
-  
-  const firstSentence = sentences[0].trim();
-  const secondSentence = sentences[1]?.trim();
-  
-  let summary = firstSentence;
-  if (secondSentence && summary.length < 100) {
-    summary += '. ' + secondSentence;
-  }
-  
-  return summary.length > 150 ? summary.slice(0, 147) + '...' : summary;
-}
+// Background script utilities for message handling
 
 // Handle messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

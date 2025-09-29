@@ -3,7 +3,7 @@
   "name": "TabSummarizer",
   "version": "1.0",
   "description": "Summarize and organize your browser tabs using Chrome's built-in AI.",
-  "permissions": ["tabs", "scripting", "activeTab"],
+  "permissions": ["tabs", "scripting", "activeTab", "notifications"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "TabSummarizer - Smart Tab Manager"
