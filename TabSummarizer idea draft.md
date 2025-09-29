@@ -160,3 +160,160 @@ Offline mode demo: unplug WiFi, show extension still working.
 👉 Do you want me to also draft the GitHub README.md (open-source repo style) with installation, features, and demo instructions so you’ll have a submission-ready repo for the hackathon?
 
 
+Steps
+🛠 Step 1: Create the Project Structure
+
+In your empty folder, create these files:
+
+tab-summarizer/
+│
+├── manifest.json
+├── background.js
+├── content.js
+├── popup.html
+├── popup.js
+└── style.css   (optional for popup styling)
+
+📝 Step 2: Write manifest.json
+
+This tells Chrome what your extension does:
+
+{
+  "manifest_version": 3,
+  "name": "TabSummarizer",
+  "version": "1.0",
+  "description": "Summarize and organize your browser tabs using Chrome’s built-in AI.",
+  "permissions": ["tabs", "scripting", "activeTab"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icon.png"
+  }
+}
+
+
+⚡ For now, you can just use a placeholder icon.png (48x48px).
+
+📄 Step 3: Build the Popup UI
+
+popup.html
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TabSummarizer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h2>TabSummarizer</h2>
+    <button id="summarize">Summarize Tabs</button>
+    <div id="output"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
+
+
+style.css (optional)
+
+body {
+  font-family: sans-serif;
+  padding: 10px;
+  width: 300px;
+}
+#output {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+⚙️ Step 4: Background Logic
+
+background.js
+Handles tab queries when the extension button is clicked.
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("TabSummarizer installed.");
+});
+
+📑 Step 5: Popup Logic
+
+popup.js
+This is where you’ll fetch open tabs and use the AI APIs.
+
+document.getElementById("summarize").addEventListener("click", async () => {
+  let tabs = await chrome.tabs.query({});
+  const output = document.getElementById("output");
+  output.innerHTML = "Summarizing tabs...";
+
+  for (const tab of tabs) {
+    try {
+      // Inject content.js into each tab to extract page text
+      let [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => document.body.innerText.slice(0, 2000) // first 2000 chars
+      });
+
+      // Summarize with Chrome’s built-in Summarizer API
+      const summary = await ai.summarizer.summarize(result, {
+        type: "key-points",
+        length: "short"
+      });
+
+      // Rewrite title for clarity
+      const betterTitle = await ai.rewriter.rewrite(tab.title, {
+        tone: "clear",
+        style: "concise"
+      });
+
+      output.innerHTML += `
+        <div style="margin-bottom:10px;">
+          <strong>${betterTitle}</strong><br/>
+          ${summary}
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+});
+
+🧠 Step 6: Content Script (Optional)
+
+If you want more advanced text extraction:
+
+content.js
+
+(() => {
+  return document.body.innerText.slice(0, 2000);
+})();
+
+🚀 Step 7: Load the Extension
+
+Open Chrome → go to chrome://extensions/.
+
+Enable Developer mode (toggle in top right).
+
+Click Load unpacked → select your tab-summarizer folder.
+
+You’ll see the extension icon appear.
+
+✅ Step 8: Test the Workflow
+
+Open a few tabs (news articles, blogs, docs).
+
+Click the extension icon → Summarize Tabs.
+
+Summaries + rewritten titles should appear in the popup.
+
+🎯 Next Steps (Stretch Goals)
+
+Add search bar (use Prompt API for natural queries).
+
+Group similar tabs (cluster by topic).
+
+Export summaries into Markdown / Notion.
+
+Show an offline demo during judging.
