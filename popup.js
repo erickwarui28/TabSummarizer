@@ -341,19 +341,19 @@ class TabSummarizer {
 
   getPageTypeContext(pageType) {
     const contexts = {
-      'github': '📁 Code',
-      'stackoverflow': '💻 Programming',
-      'youtube': '📺 Video',
-      'shopping': '🛒 Shopping',
-      'news': '📰 News',
-      'documentation': '📚 Docs',
-      'social': '👥 Social',
-      'reddit': '💬 Discussion',
-      'wikipedia': '📖 Encyclopedia',
-      'search': '🔍 Search',
-      'general': '🌐 Web'
+      'github': '[Code]',
+      'stackoverflow': '[Programming]',
+      'youtube': '[Video]',
+      'shopping': '[Shopping]',
+      'news': '[News]',
+      'documentation': '[Docs]',
+      'social': '[Social]',
+      'reddit': '[Discussion]',
+      'wikipedia': '[Encyclopedia]',
+      'search': '[Search]',
+      'general': '[Web]'
     };
-    return contexts[pageType] || '🌐 Web';
+    return contexts[pageType] || '[Web]';
   }
 
   generateBetterTitle(tab) {
