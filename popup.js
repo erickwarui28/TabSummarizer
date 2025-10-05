@@ -8,10 +8,6 @@ class TabSummarizer {
   }
 
   initializeEventListeners() {
-    document.getElementById('summarize').addEventListener('click', () => {
-      this.summarizeAllTabs();
-    });
-
     document.getElementById('search-btn').addEventListener('click', () => {
       this.searchTabs();
     });
@@ -31,9 +27,116 @@ class TabSummarizer {
       
       if (tabs.length > 0) {
         document.querySelector('.search-section').style.display = 'flex';
+        // Automatically generate brief summary when extension opens
+        await this.generateBriefSummary(tabs);
       }
     } catch (error) {
       console.error('Error loading tab count:', error);
+    }
+  }
+
+  async generateBriefSummary(tabs) {
+    const output = document.getElementById('output');
+    
+    // Show loading state
+    output.innerHTML = '<div class="empty-state"><div class="icon">...</div>Generating summary...</div>';
+
+    try {
+      // Prepare tab information for summarization
+      const tabInfo = tabs.map(tab => {
+        const domain = new URL(tab.url).hostname;
+        const pageType = this.detectPageType(tab.url, tab.title);
+        return `${pageType}: ${tab.title} (${domain})`;
+      }).join(', ');
+
+      // Try to use Chrome's Summarizer API for a brief overview
+      let briefSummary = 'Unable to generate summary';
+      
+      try {
+        // Check if Chrome's built-in Summarizer API is available
+        if (typeof Summarizer !== 'undefined') {
+          console.log('Using Chrome Summarizer API for brief summary');
+          
+          // Check availability
+          const availability = await Summarizer.availability();
+          if (availability === 'available' || availability === 'downloadable') {
+            const summarizer = await Summarizer.create({
+              type: 'tldr',
+              length: 'short',
+              format: 'plain-text'
+            });
+            
+            briefSummary = await summarizer.summarize(tabInfo, {
+              context: 'This is a list of open browser tabs with their titles and domains.'
+            });
+          } else {
+            throw new Error('Summarizer API unavailable');
+          }
+        } else {
+          throw new Error('Summarizer API not available');
+        }
+      } catch (error) {
+        console.warn('Summarizer API failed, using fallback:', error.message);
+        // Fallback: generate a simple summary from tab types
+        briefSummary = this.generateFallbackBriefSummary(tabs);
+      }
+
+      // Display the brief summary
+      output.innerHTML = `
+        <div class="brief-summary">
+          <div class="summary-header">📋 Brief Overview</div>
+          <div class="summary-text">${briefSummary}</div>
+          <div class="summary-note">Click search above to explore individual tabs</div>
+        </div>
+      `;
+
+    } catch (error) {
+      console.error('Error generating brief summary:', error);
+      this.showError('Failed to generate summary. Please try again.');
+    }
+  }
+
+  generateFallbackBriefSummary(tabs) {
+    const pageTypes = {};
+    
+    tabs.forEach(tab => {
+      const pageType = this.detectPageType(tab.url, tab.title);
+      pageTypes[pageType] = (pageTypes[pageType] || 0) + 1;
+    });
+
+    const sortedTypes = Object.entries(pageTypes)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3);
+
+    if (sortedTypes.length === 0) {
+      return `You have ${tabs.length} open tabs across various websites.`;
+    }
+
+    const typeDescriptions = {
+      'github': 'development/coding',
+      'stackoverflow': 'programming help',
+      'youtube': 'video content',
+      'shopping': 'shopping',
+      'news': 'news articles',
+      'documentation': 'documentation',
+      'social': 'social media',
+      'reddit': 'discussions',
+      'wikipedia': 'reference',
+      'search': 'search results',
+      'general': 'general web content'
+    };
+
+    const mainTypes = sortedTypes.map(([type, count]) => {
+      const description = typeDescriptions[type] || type;
+      return count === 1 ? `1 ${description} tab` : `${count} ${description} tabs`;
+    });
+
+    if (mainTypes.length === 1) {
+      return `You have ${tabs.length} open tabs, mostly ${mainTypes[0]}.`;
+    } else if (mainTypes.length === 2) {
+      return `You have ${tabs.length} open tabs: ${mainTypes[0]} and ${mainTypes[1]}.`;
+    } else {
+      return `You have ${tabs.length} open tabs: ${mainTypes.slice(0, -1).join(', ')}, and ${mainTypes[mainTypes.length - 1]}.`;
     }
   }
 
