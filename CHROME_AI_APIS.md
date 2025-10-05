@@ -83,33 +83,75 @@ When the Rewriter API is unavailable or fails:
 
 ---
 
-### 3. Prompt API (Planned)
+### 3. Prompt API
 
-**Status**: 🔄 Planned for Future Implementation  
+**Status**: ✅ Implemented  
 **Chrome Version**: Available from Chrome 138 stable (Extensions only)  
-**Documentation**: [Chrome Prompt API](https://developer.chrome.com/docs/ai/built-in-apis#prompt_api)
+**Documentation**: [Chrome Prompt API](https://developer.chrome.com/docs/ai/prompt-api)
 
-#### Intended Implementation
+#### Implementation Details
 
 ```javascript
-// Future implementation in popup.js
-async function queryTabs(tabs, userQuery) {
-  if (typeof ai !== 'undefined' && ai.prompt) {
-    const structured = await ai.prompt.generate({
-      prompt: `From this list of tabs: ${JSON.stringify(tabs)}, 
-               return only the ones matching: "${userQuery}"`,
-      output: "json"
-    });
-    return JSON.parse(structured);
-  }
+// Location: popup.js - searchWithPromptAPI() method
+async searchWithPromptAPI(query) {
+  // Check LanguageModel availability
+  const availability = await LanguageModel.availability();
+  if (availability === 'unavailable') return null;
+
+  // Create session with language configuration
+  const session = await LanguageModel.create({
+    expectedInputs: [
+      { type: "text", languages: ["en"] }
+    ],
+    expectedOutputs: [
+      { type: "text", languages: ["en"] }
+    ]
+  });
+  
+  const schema = {
+    "type": "object",
+    "properties": {
+      "matchingTabs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "number"},
+            "relevanceScore": {"type": "number", "minimum": 0, "maximum": 1},
+            "reason": {"type": "string"}
+          }
+        }
+      }
+    }
+  };
+
+  // Query with structured output
+  const result = await session.prompt(prompt, {
+    responseConstraint: schema
+  });
+  
+  return JSON.parse(result);
 }
 ```
 
-#### Planned Use Cases
-- Natural language search through tab summaries
-- Intelligent tab filtering based on user queries
-- Context-aware tab recommendations
-- Advanced clustering based on semantic similarity
+#### Configuration Options
+- **expectedInputs**: `[{ type: "text", languages: ["en"] }]` - Specifies English input language
+- **expectedOutputs**: `[{ type: "text", languages: ["en"] }]` - Specifies English output for optimal quality and safety
+- **responseConstraint**: JSON schema for structured, reliable responses
+- **Session Management**: Proper creation and cleanup of LanguageModel sessions
+
+#### Features Implemented
+- **Natural Language Search**: "show me programming tutorials", "find shopping sites"
+- **Semantic Understanding**: Finds relevant tabs based on meaning, not just keywords
+- **Relevance Scoring**: Returns tabs with confidence scores (0-100%)
+- **Reasoning**: Provides explanations for why tabs match the query
+- **Structured Output**: Uses JSON schema for reliable, parseable results
+
+#### Use Cases in TabSummarizer
+- Intelligent tab search using natural language
+- Context-aware filtering based on content meaning
+- Relevance-ranked results with explanations
+- Fallback to basic keyword search when AI unavailable
 
 ---
 
@@ -121,7 +163,7 @@ async function queryTabs(tabs, userQuery) {
 |-----|----------|------------|----------------|------------------------|
 | Summarizer API | ✅ Stable | ✅ Stable | 138+ | ✅ Implemented |
 | Rewriter API | 🔄 Origin Trial | ✅ Stable | 138+ | ✅ Implemented |
-| Prompt API | 🔄 Origin Trial | ✅ Stable | 138+ | 🔄 Planned |
+| Prompt API | 🔄 Origin Trial | ✅ Stable | 138+ | ✅ Implemented |
 | Writer API | 🔄 Origin Trial | 🔄 Origin Trial | 138+ | ❌ Not Used |
 | Translator API | ✅ Stable | ✅ Stable | 138+ | ❌ Not Used |
 | Language Detector API | ✅ Stable | ✅ Stable | 138+ | ❌ Not Used |

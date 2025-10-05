@@ -462,14 +462,22 @@ class TabSummarizer {
   }
 
   renderTabItem(item) {
-    const { tab, summary, betterTitle } = item;
+    const { tab, summary, betterTitle, relevanceScore, reason } = item;
     const domain = new URL(tab.url).hostname;
+    
+    // Show relevance score and reason if available (from AI search)
+    const relevanceInfo = relevanceScore && reason ? 
+      `<div class="relevance-info">
+        <span class="relevance-score">Relevance: ${Math.round(relevanceScore * 100)}%</span>
+        <span class="relevance-reason">${reason}</span>
+       </div>` : '';
     
     return `
       <div class="tab-item">
         <div class="tab-title">${betterTitle}</div>
         <div class="tab-summary">${summary}</div>
         <div class="tab-url">${domain}</div>
+        ${relevanceInfo}
       </div>
     `;
   }
@@ -478,14 +486,18 @@ class TabSummarizer {
     const query = document.getElementById('search-input').value.trim();
     if (!query || !this.summaries.length) return;
 
-    try {
-      const searchResults = this.summaries.filter(item => {
-        const searchText = `${item.tab.title} ${item.tab.url} ${item.summary} ${item.betterTitle}`.toLowerCase();
-        return searchText.includes(query.toLowerCase());
-      });
+    const output = document.getElementById('output');
+    output.innerHTML = '<div class="empty-state"><div class="icon">...</div>Searching with AI...</div>';
 
-      const output = document.getElementById('output');
+    try {
+      // Try to use Chrome's Prompt API for intelligent search
+      let searchResults = await this.searchWithPromptAPI(query);
       
+      // Fallback to basic search if Prompt API fails
+      if (!searchResults || searchResults.length === 0) {
+        searchResults = this.basicSearch(query);
+      }
+
       if (searchResults.length === 0) {
         output.innerHTML = `
           <div class="empty-state">
@@ -501,8 +513,138 @@ class TabSummarizer {
       }
     } catch (error) {
       console.error('Search error:', error);
-      this.showError('Search failed. Please try again.');
+      // Fallback to basic search
+      const searchResults = this.basicSearch(query);
+      
+      if (searchResults.length === 0) {
+        output.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">[?]</div>
+            No tabs found matching "${query}"
+          </div>
+        `;
+      } else {
+        output.innerHTML = `
+          <div class="cluster-header">Search Results for "${query}" (Basic Search)</div>
+          ${searchResults.map(item => this.renderTabItem(item)).join('')}
+        `;
+      }
     }
+  }
+
+  async searchWithPromptAPI(query) {
+    try {
+      // Check if LanguageModel is available
+      if (typeof LanguageModel === 'undefined') {
+        console.log('LanguageModel not available');
+        return null;
+      }
+
+      // Check availability
+      const availability = await LanguageModel.availability();
+      if (availability === 'unavailable') {
+        console.log('LanguageModel unavailable');
+        return null;
+      }
+
+      console.log('Using Chrome Prompt API for intelligent search');
+
+      // Create a session with language configuration
+      const session = await LanguageModel.create({
+        expectedInputs: [
+          { type: "text", languages: ["en"] }
+        ],
+        expectedOutputs: [
+          { type: "text", languages: ["en"] }
+        ]
+      });
+
+      // Prepare tab data for the AI
+      const tabData = this.summaries.map((item, index) => ({
+        id: index,
+        title: item.tab.title,
+        url: item.tab.url,
+        summary: item.summary,
+        betterTitle: item.betterTitle,
+        domain: new URL(item.tab.url).hostname
+      }));
+
+      // Create a JSON schema for structured output
+      const schema = {
+        "type": "object",
+        "properties": {
+          "matchingTabs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "number"},
+                "relevanceScore": {"type": "number", "minimum": 0, "maximum": 1},
+                "reason": {"type": "string"}
+              },
+              "required": ["id", "relevanceScore", "reason"]
+            }
+          }
+        },
+        "required": ["matchingTabs"]
+      };
+
+      // Create the prompt
+      const prompt = `
+You are a helpful assistant that finds relevant browser tabs based on user queries.
+
+User Query: "${query}"
+
+Available Tabs:
+${tabData.map((tab, i) => `${i}: ${tab.betterTitle} - ${tab.summary} (${tab.domain})`).join('\n')}
+
+Find tabs that match the user's query. Consider:
+- Direct keyword matches
+- Semantic similarity
+- Context and meaning
+- Content type (news, code, videos, etc.)
+
+Return only the most relevant tabs (maximum 10) with a relevance score and brief reason.
+`;
+
+      // Query the AI with structured output
+      const result = await session.prompt(prompt, {
+        responseConstraint: schema
+      });
+
+      // Parse the JSON response
+      const parsedResult = JSON.parse(result);
+      
+      // Map back to original tab summaries
+      const matchingTabs = parsedResult.matchingTabs
+        .filter(item => item.relevanceScore > 0.3) // Only include reasonably relevant results
+        .sort((a, b) => b.relevanceScore - a.relevanceScore) // Sort by relevance
+        .map(item => {
+          const originalTab = this.summaries[item.id];
+          return {
+            ...originalTab,
+            relevanceScore: item.relevanceScore,
+            reason: item.reason
+          };
+        });
+
+      // Clean up the session
+      session.destroy();
+
+      return matchingTabs;
+
+    } catch (error) {
+      console.error('Prompt API search failed:', error);
+      return null;
+    }
+  }
+
+  basicSearch(query) {
+    const queryLower = query.toLowerCase();
+    return this.summaries.filter(item => {
+      const searchText = `${item.tab.title} ${item.tab.url} ${item.summary} ${item.betterTitle}`.toLowerCase();
+      return searchText.includes(queryLower);
+    });
   }
 
   showEmptyState() {

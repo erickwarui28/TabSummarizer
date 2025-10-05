@@ -178,6 +178,25 @@ body {
   word-break: break-all;
 }
 
+.relevance-info {
+  margin-top: 6px;
+  padding: 4px 6px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.relevance-score {
+  color: #667eea;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.relevance-reason {
+  color: #666;
+  font-style: italic;
+}
+
 .tab-cluster {
   margin-bottom: 16px;
 }
