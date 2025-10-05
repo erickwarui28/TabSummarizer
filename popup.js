@@ -211,7 +211,7 @@ class TabSummarizer {
     // Create the brief summary section
     const briefSummaryHTML = `
       <div class="brief-summary">
-        <div class="summary-header">📊 Brief Overview</div>
+        <div class="summary-header">[Summary] Brief Overview</div>
         <div class="summary-text">${briefSummary}</div>
       </div>
     `;
