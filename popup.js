@@ -81,14 +81,15 @@ class TabSummarizer {
         briefSummary = this.generateFallbackBriefSummary(tabs);
       }
 
-      // Display the brief summary
-      output.innerHTML = `
-        <div class="brief-summary">
-          <div class="summary-header">📋 Brief Overview</div>
-          <div class="summary-text">${briefSummary}</div>
-          <div class="summary-note">Click search above to explore individual tabs</div>
-        </div>
-      `;
+      // Store tabs for display
+      this.tabs = tabs;
+      this.summaries = [];
+      
+      // Process tabs to get summaries for display
+      await this.processAllTabsForDisplay();
+      
+      // Display the brief summary and tabs
+      this.displayBriefSummaryWithTabs(briefSummary);
 
     } catch (error) {
       console.error('Error generating brief summary:', error);
@@ -138,6 +139,106 @@ class TabSummarizer {
     } else {
       return `You have ${tabs.length} open tabs: ${mainTypes.slice(0, -1).join(', ')}, and ${mainTypes[mainTypes.length - 1]}.`;
     }
+  }
+
+  async processAllTabsForDisplay() {
+    // Process tabs in batches to avoid overwhelming the system
+    const batchSize = 5;
+    for (let i = 0; i < this.tabs.length; i += batchSize) {
+      const batch = this.tabs.slice(i, i + batchSize);
+      await this.processBatchForDisplay(batch);
+    }
+  }
+
+  async processBatchForDisplay(batch) {
+    const promises = batch.map(tab => this.processTabForDisplay(tab));
+    const results = await Promise.allSettled(promises);
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        this.summaries.push(result.value);
+      } else {
+        console.error(`Failed to process tab ${batch[index].id}:`, result.reason);
+        this.summaries.push({
+          tab: batch[index],
+          summary: 'Unable to summarize this tab',
+          betterTitle: batch[index].title
+        });
+      }
+    });
+  }
+
+  async processTabForDisplay(tab) {
+    try {
+      // Skip chrome:// and extension pages
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        const pageType = tab.url.startsWith('chrome://') ? 'chrome' : 'extension';
+        const summary = pageType === 'chrome' ? 
+          `Chrome system page: ${tab.title}` : 
+          `Extension page: ${tab.title}`;
+        const betterTitle = this.generateBetterTitle(tab);
+        
+        return {
+          tab,
+          summary,
+          betterTitle
+        };
+      }
+
+      // For display purposes, use a simpler approach - just use metadata
+      const summary = this.generateSummaryFromMetadata(tab, '');
+      const betterTitle = this.generateBetterTitle(tab);
+      
+      return {
+        tab,
+        summary,
+        betterTitle
+      };
+
+    } catch (error) {
+      console.error(`Error processing tab ${tab.id}:`, error);
+      return {
+        tab,
+        summary: 'Error processing this tab',
+        betterTitle: tab.title
+      };
+    }
+  }
+
+  displayBriefSummaryWithTabs(briefSummary) {
+    const output = document.getElementById('output');
+    
+    // Create the brief summary section
+    const briefSummaryHTML = `
+      <div class="brief-summary">
+        <div class="summary-header">📊 Brief Overview</div>
+        <div class="summary-text">${briefSummary}</div>
+      </div>
+    `;
+    
+    // Create the tabs section
+    let tabsHTML = '';
+    if (this.summaries.length > 0) {
+      // Group similar tabs (basic clustering)
+      const clusters = this.clusterTabs();
+      
+      if (clusters.length > 1) {
+        // Show clustered results
+        clusters.forEach(cluster => {
+          tabsHTML += `
+            <div class="tab-cluster">
+              <div class="cluster-header">${cluster.category}</div>
+              ${cluster.tabs.map(item => this.renderTabItem(item)).join('')}
+            </div>
+          `;
+        });
+      } else {
+        // Show flat list
+        tabsHTML = this.summaries.map(item => this.renderTabItem(item)).join('');
+      }
+    }
+    
+    output.innerHTML = briefSummaryHTML + tabsHTML;
   }
 
   async summarizeAllTabs() {
