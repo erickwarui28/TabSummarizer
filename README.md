@@ -44,6 +44,19 @@ Too many open tabs = information overload. TabSummarizer solves this by:
 - `scripting`: Inject scripts for content extraction
 - `activeTab`: Access current tab information
 
+## Built with
+
+- **JavaScript** - Core programming language
+- **Chrome Extension APIs** - Extension framework and tab management
+- **Chrome Built-in AI APIs** - Local AI processing
+  - **Gemini Nano** - AI model for text processing
+  - **Summarizer API** - Text summarization
+  - **Rewriter API** - Text rewriting and improvement
+  - **Prompt API** - Natural language query processing
+- **HTML5** - Popup interface
+- **CSS3** - Styling and responsive design
+- **Manifest V3** - Extension configuration and permissions
+
 ## 🔧 Development
 
 ### Prerequisites
