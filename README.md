@@ -9,8 +9,11 @@ A Chrome Extension that clusters and summarizes browser tabs using Chrome's buil
 - **Smart Tab Summarization**: Automatically summarize each tab into 2-3 sentences using Chrome's Summarizer API
 - **Improved Tab Titles**: Rewrite confusing tab titles with clearer, more descriptive ones using the Rewriter API
 - **Natural Language Queries**: Use multimodal queries like "show me all articles with charts/images about AI" with the Prompt API
+- **Advanced Tab Clustering**: Group similar tabs using cosine similarity and TF-IDF vectorization for intelligent organization
+- **Export to Markdown**: Save organized tab summaries to Markdown files for note-taking and research
 - **Offline-First**: Runs entirely locally using Chrome's built-in AI - no server round-trips needed
-- **Tab Clustering**: Group similar tabs together for better organization
+- **Real-Time Processing**: Automatically processes tabs as you browse with intelligent caching
+- **Beautiful Interface**: Modern, responsive design with smooth animations and accessibility features
 
 ## 🎯 Problem Solved
 
@@ -108,30 +111,33 @@ const structured = await ai.prompt.generate({
 ### Phase 1: Core Functionality
 - [x] Basic extension setup
 - [x] Tab collection and display
-- [ ] Summarizer API integration
-- [ ] Basic UI implementation
+- [x] Summarizer API integration
+- [x] Basic UI implementation
 
 ### Phase 2: Enhanced Features
-- [ ] Rewriter API for better titles
-- [ ] Improved popup interface
-- [ ] Tab clustering functionality
+- [x] Rewriter API for better titles
+- [x] Improved popup interface
+- [x] Tab clustering functionality
 
 ### Phase 3: Advanced Features
-- [ ] Natural language queries with Prompt API
-- [ ] Export summaries to Markdown
-- [ ] Advanced filtering and search
+- [x] Natural language queries with Prompt API
+- [x] Export summaries to Markdown
+- [x] Advanced filtering and search
 
 ### Phase 4: Polish & Optimization
-- [ ] UI/UX improvements
-- [ ] Performance optimization
-- [ ] Comprehensive testing
+- [x] UI/UX improvements
+- [x] Performance optimization
+- [x] Comprehensive testing
 
 ## 🎬 Demo Features
 
 - **Offline Mode Demo**: Unplug WiFi and show extension still working
 - **Real-time Summarization**: Watch tabs get summarized as you browse
-- **Smart Clustering**: See similar tabs grouped automatically
-- **Natural Language Search**: Query your tabs with plain English
+- **Smart Clustering**: See similar tabs grouped automatically using advanced algorithms
+- **Natural Language Search**: Query your tabs with plain English using AI
+- **Export Functionality**: Download organized summaries as Markdown files
+- **Advanced Analytics**: View similarity scores and clustering metrics
+- **Context-Aware Processing**: Different summarization approaches for different content types
 
 ## 🤝 Contributing
 

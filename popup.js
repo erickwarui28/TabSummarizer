@@ -18,6 +18,10 @@ class TabSummarizer {
       }
     });
 
+    document.getElementById('export-btn').addEventListener('click', () => {
+      this.exportToMarkdown();
+    });
+
     // Add event delegation for tab navigation
     document.addEventListener('click', (e) => {
       const tabItem = e.target.closest('.tab-item');
@@ -35,6 +39,7 @@ class TabSummarizer {
       
       if (tabs.length > 0) {
         document.querySelector('.search-section').style.display = 'flex';
+        document.querySelector('.export-section').style.display = 'flex';
         // Automatically generate brief summary when extension opens
         await this.generateBriefSummary(tabs);
       }
@@ -757,6 +762,16 @@ class TabSummarizer {
   }
 
   clusterTabs() {
+    if (this.summaries.length <= 3) {
+      // For small numbers of tabs, use simple clustering
+      return this.simpleClusterTabs();
+    }
+
+    // Use advanced cosine similarity clustering for larger sets
+    return this.advancedClusterTabs();
+  }
+
+  simpleClusterTabs() {
     const clusters = {
       'Research & Articles': [],
       'Social Media': [],
@@ -794,6 +809,242 @@ class TabSummarizer {
     return Object.entries(clusters)
       .filter(([_, tabs]) => tabs.length > 0)
       .map(([category, tabs]) => ({ category, tabs }));
+  }
+
+  advancedClusterTabs() {
+    // Create TF-IDF vectors for each tab's content
+    const vectors = this.summaries.map(item => this.createTFIDFVector(item));
+    
+    // Calculate similarity matrix
+    const similarityMatrix = this.calculateSimilarityMatrix(vectors);
+    
+    // Use hierarchical clustering with cosine similarity
+    const clusters = this.hierarchicalClustering(similarityMatrix, 0.3); // threshold of 0.3
+    
+    // Convert cluster indices back to tab summaries
+    const result = [];
+    clusters.forEach((cluster, index) => {
+      if (cluster.length > 0) {
+        const clusterTabs = cluster.map(idx => this.summaries[idx]);
+        const category = this.generateClusterCategory(clusterTabs);
+        result.push({
+          category: category,
+          tabs: clusterTabs,
+          similarity: this.calculateClusterSimilarity(clusterTabs)
+        });
+      }
+    });
+
+    // Sort clusters by size and similarity
+    return result.sort((a, b) => {
+      if (a.tabs.length !== b.tabs.length) {
+        return b.tabs.length - a.tabs.length; // Larger clusters first
+      }
+      return b.similarity - a.similarity; // Higher similarity first
+    });
+  }
+
+  createTFIDFVector(item) {
+    // Combine title, summary, and domain for vectorization
+    const text = `${item.betterTitle || item.tab.title} ${item.summary} ${new URL(item.tab.url).hostname}`.toLowerCase();
+    
+    // Simple tokenization and cleaning
+    const tokens = text
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(token => token.length > 2 && !this.isStopWord(token));
+    
+    // Create term frequency map
+    const termFreq = {};
+    tokens.forEach(token => {
+      termFreq[token] = (termFreq[token] || 0) + 1;
+    });
+    
+    // Normalize by document length
+    const docLength = tokens.length;
+    Object.keys(termFreq).forEach(term => {
+      termFreq[term] = termFreq[term] / docLength;
+    });
+    
+    return termFreq;
+  }
+
+  isStopWord(word) {
+    const stopWords = new Set([
+      'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+      'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after',
+      'above', 'below', 'between', 'among', 'is', 'are', 'was', 'were', 'be',
+      'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+      'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these',
+      'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her',
+      'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'a', 'an'
+    ]);
+    return stopWords.has(word);
+  }
+
+  calculateSimilarityMatrix(vectors) {
+    const n = vectors.length;
+    const matrix = Array(n).fill().map(() => Array(n).fill(0));
+    
+    for (let i = 0; i < n; i++) {
+      for (let j = i; j < n; j++) {
+        if (i === j) {
+          matrix[i][j] = 1.0;
+        } else {
+          const similarity = this.cosineSimilarity(vectors[i], vectors[j]);
+          matrix[i][j] = similarity;
+          matrix[j][i] = similarity;
+        }
+      }
+    }
+    
+    return matrix;
+  }
+
+  cosineSimilarity(vecA, vecB) {
+    const keysA = Object.keys(vecA);
+    const keysB = Object.keys(vecB);
+    const allKeys = new Set([...keysA, ...keysB]);
+    
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    allKeys.forEach(key => {
+      const valA = vecA[key] || 0;
+      const valB = vecB[key] || 0;
+      dotProduct += valA * valB;
+      normA += valA * valA;
+      normB += valB * valB;
+    });
+    
+    if (normA === 0 || normB === 0) return 0;
+    
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  hierarchicalClustering(similarityMatrix, threshold) {
+    const n = similarityMatrix.length;
+    const clusters = Array(n).fill().map((_, i) => [i]); // Each item starts as its own cluster
+    
+    while (clusters.length > 1) {
+      let maxSimilarity = -1;
+      let bestPair = [-1, -1];
+      
+      // Find the most similar pair of clusters
+      for (let i = 0; i < clusters.length; i++) {
+        for (let j = i + 1; j < clusters.length; j++) {
+          const similarity = this.calculateClusterSimilarityFromMatrix(
+            clusters[i], clusters[j], similarityMatrix
+          );
+          if (similarity > maxSimilarity) {
+            maxSimilarity = similarity;
+            bestPair = [i, j];
+          }
+        }
+      }
+      
+      // If the best similarity is below threshold, stop clustering
+      if (maxSimilarity < threshold) break;
+      
+      // Merge the two most similar clusters
+      const [i, j] = bestPair;
+      const mergedCluster = [...clusters[i], ...clusters[j]];
+      clusters.splice(Math.max(i, j), 1); // Remove the larger index first
+      clusters.splice(Math.min(i, j), 1); // Then remove the smaller index
+      clusters.push(mergedCluster);
+    }
+    
+    return clusters;
+  }
+
+  calculateClusterSimilarityFromMatrix(clusterA, clusterB, similarityMatrix) {
+    let totalSimilarity = 0;
+    let count = 0;
+    
+    clusterA.forEach(itemA => {
+      clusterB.forEach(itemB => {
+        totalSimilarity += similarityMatrix[itemA][itemB];
+        count++;
+      });
+    });
+    
+    return count > 0 ? totalSimilarity / count : 0;
+  }
+
+  generateClusterCategory(tabs) {
+    // Analyze the tabs to generate a meaningful category name
+    const domains = tabs.map(tab => new URL(tab.tab.url).hostname);
+    const titles = tabs.map(tab => tab.betterTitle || tab.tab.title);
+    
+    // Check for common patterns
+    const domainCounts = {};
+    domains.forEach(domain => {
+      const baseDomain = domain.replace(/^www\./, '').split('.')[0];
+      domainCounts[baseDomain] = (domainCounts[baseDomain] || 0) + 1;
+    });
+    
+    // Find the most common domain
+    const mostCommonDomain = Object.entries(domainCounts)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    if (mostCommonDomain && mostCommonDomain[1] >= tabs.length * 0.6) {
+      // If 60% or more tabs are from the same domain, use that
+      return `${mostCommonDomain[0].charAt(0).toUpperCase() + mostCommonDomain[0].slice(1)} Content`;
+    }
+    
+    // Analyze content types
+    const contentTypes = {
+      'Development': 0,
+      'Research': 0,
+      'News': 0,
+      'Social': 0,
+      'Shopping': 0,
+      'Entertainment': 0
+    };
+    
+    tabs.forEach(tab => {
+      const text = `${tab.betterTitle || tab.tab.title} ${tab.summary}`.toLowerCase();
+      if (text.includes('github') || text.includes('code') || text.includes('programming')) {
+        contentTypes['Development']++;
+      } else if (text.includes('research') || text.includes('study') || text.includes('article')) {
+        contentTypes['Research']++;
+      } else if (text.includes('news') || text.includes('breaking')) {
+        contentTypes['News']++;
+      } else if (text.includes('social') || text.includes('twitter') || text.includes('facebook')) {
+        contentTypes['Social']++;
+      } else if (text.includes('buy') || text.includes('shop') || text.includes('price')) {
+        contentTypes['Shopping']++;
+      } else if (text.includes('video') || text.includes('youtube') || text.includes('entertainment')) {
+        contentTypes['Entertainment']++;
+      }
+    });
+    
+    const dominantType = Object.entries(contentTypes)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    if (dominantType && dominantType[1] > 0) {
+      return dominantType[0];
+    }
+    
+    return `Related Content (${tabs.length} tabs)`;
+  }
+
+  calculateClusterSimilarity(tabs) {
+    if (tabs.length <= 1) return 1.0;
+    
+    const vectors = tabs.map(tab => this.createTFIDFVector(tab));
+    let totalSimilarity = 0;
+    let count = 0;
+    
+    for (let i = 0; i < vectors.length; i++) {
+      for (let j = i + 1; j < vectors.length; j++) {
+        totalSimilarity += this.cosineSimilarity(vectors[i], vectors[j]);
+        count++;
+      }
+    }
+    
+    return count > 0 ? totalSimilarity / count : 0;
   }
 
   renderTabItem(item) {
@@ -1025,6 +1276,158 @@ Return only the most relevant tabs (maximum 10) with a relevance score and brief
       // If the tab no longer exists, show an error message
       this.showError('This tab is no longer available.');
     }
+  }
+
+  async exportToMarkdown() {
+    try {
+      // Get current tabs
+      const tabs = await chrome.tabs.query({});
+      if (tabs.length === 0) {
+        this.showError('No tabs to export.');
+        return;
+      }
+
+      // Show loading state
+      const exportBtn = document.getElementById('export-btn');
+      const originalText = exportBtn.textContent;
+      exportBtn.textContent = '📤 Exporting...';
+      exportBtn.disabled = true;
+
+      // Process tabs for export
+      const exportData = [];
+      const batchSize = 3; // Process in smaller batches for export
+
+      for (let i = 0; i < tabs.length; i += batchSize) {
+        const batch = tabs.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (tab) => {
+          try {
+            const result = await this.processTab(tab);
+            return {
+              title: result.betterTitle || tab.title,
+              url: tab.url,
+              summary: result.summary,
+              domain: new URL(tab.url).hostname,
+              pageType: this.detectPageType(tab.url, tab.title)
+            };
+          } catch (error) {
+            console.error(`Error processing tab ${tab.id}:`, error);
+            return {
+              title: tab.title,
+              url: tab.url,
+              summary: 'Unable to generate summary',
+              domain: new URL(tab.url).hostname,
+              pageType: this.detectPageType(tab.url, tab.title)
+            };
+          }
+        });
+
+        const batchResults = await Promise.allSettled(batchPromises);
+        batchResults.forEach(result => {
+          if (result.status === 'fulfilled') {
+            exportData.push(result.value);
+          }
+        });
+
+        // Update progress
+        const progress = Math.round(((i + batchSize) / tabs.length) * 100);
+        exportBtn.textContent = `📤 Exporting... ${Math.min(progress, 100)}%`;
+      }
+
+      // Generate Markdown content
+      const markdown = this.generateMarkdown(exportData);
+
+      // Create and download file
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tab-summaries-${new Date().toISOString().split('T')[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Reset button
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+
+      // Show success message
+      this.showSuccess(`Successfully exported ${exportData.length} tab summaries to Markdown!`);
+
+    } catch (error) {
+      console.error('Error exporting to Markdown:', error);
+      this.showError('Failed to export summaries. Please try again.');
+      
+      // Reset button
+      const exportBtn = document.getElementById('export-btn');
+      exportBtn.textContent = '📤 Export';
+      exportBtn.disabled = false;
+    }
+  }
+
+  generateMarkdown(data) {
+    const timestamp = new Date().toLocaleString();
+    const totalTabs = data.length;
+    
+    // Group by page type for better organization
+    const groupedData = data.reduce((acc, item) => {
+      const type = item.pageType || 'Other';
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(item);
+      return acc;
+    }, {});
+
+    let markdown = `# Tab Summaries\n\n`;
+    markdown += `**Generated:** ${timestamp}\n`;
+    markdown += `**Total Tabs:** ${totalTabs}\n\n`;
+    markdown += `---\n\n`;
+
+    // Add table of contents
+    markdown += `## Table of Contents\n\n`;
+    Object.keys(groupedData).sort().forEach(type => {
+      const count = groupedData[type].length;
+      markdown += `- [${type}](#${type.toLowerCase().replace(/[^a-z0-9]/g, '-')}) (${count} tabs)\n`;
+    });
+    markdown += `\n---\n\n`;
+
+    // Add content by category
+    Object.keys(groupedData).sort().forEach(type => {
+      const items = groupedData[type];
+      markdown += `## ${type}\n\n`;
+      
+      items.forEach((item, index) => {
+        markdown += `### ${index + 1}. ${item.title}\n\n`;
+        markdown += `**URL:** [${item.url}](${item.url})\n\n`;
+        markdown += `**Domain:** ${item.domain}\n\n`;
+        markdown += `**Summary:**\n${item.summary}\n\n`;
+        markdown += `---\n\n`;
+      });
+    });
+
+    // Add footer
+    markdown += `## Export Information\n\n`;
+    markdown += `- **Generated by:** TabSummarizer Chrome Extension\n`;
+    markdown += `- **Export Date:** ${timestamp}\n`;
+    markdown += `- **Total Tabs Processed:** ${totalTabs}\n`;
+    markdown += `- **Categories:** ${Object.keys(groupedData).length}\n\n`;
+    markdown += `*This export was generated using Chrome's built-in AI APIs for intelligent summarization.*\n`;
+
+    return markdown;
+  }
+
+  showSuccess(message) {
+    const output = document.getElementById('output');
+    output.innerHTML = `
+      <div class="success-state">
+        <div class="icon">✅</div>
+        <div class="message">${message}</div>
+      </div>
+    `;
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      this.loadTabCount();
+    }, 3000);
   }
 }
 
