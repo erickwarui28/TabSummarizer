@@ -17,6 +17,14 @@ class TabSummarizer {
         this.searchTabs();
       }
     });
+
+    // Add event delegation for tab navigation
+    document.addEventListener('click', (e) => {
+      const tabItem = e.target.closest('.tab-item');
+      if (tabItem && tabItem.dataset.tabId) {
+        this.navigateToTab(parseInt(tabItem.dataset.tabId));
+      }
+    });
   }
 
   async loadTabCount() {
@@ -677,7 +685,7 @@ class TabSummarizer {
        </div>` : '';
     
     return `
-      <div class="tab-item">
+      <div class="tab-item" data-tab-id="${tab.id}">
         <div class="tab-title">${betterTitle}</div>
         <div class="tab-summary">${summary}</div>
         <div class="tab-url">${domain}</div>
@@ -870,6 +878,26 @@ Return only the most relevant tabs (maximum 10) with a relevance score and brief
         ${message}
       </div>
     `;
+  }
+
+  async navigateToTab(tabId) {
+    try {
+      // Activate and bring the tab to the foreground
+      await chrome.tabs.update(tabId, { active: true });
+      
+      // Focus the window containing the tab
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      
+      // Close the popup
+      window.close();
+    } catch (error) {
+      console.error('Error navigating to tab:', error);
+      // If the tab no longer exists, show an error message
+      this.showError('This tab is no longer available.');
+    }
   }
 }
 

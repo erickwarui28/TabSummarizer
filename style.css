@@ -150,6 +150,7 @@ body {
   border-left: 4px solid #667eea;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .tab-item:hover {
