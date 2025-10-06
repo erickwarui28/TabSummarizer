@@ -93,6 +93,9 @@ class TabSummarizer {
             briefSummary = await summarizer.summarize(tabInfo, {
               context: 'This is a list of open browser tabs with their titles and domains.'
             });
+            
+            // Clean up the summarizer
+            summarizer.destroy();
           } else {
             throw new Error('Summarizer API unavailable');
           }
@@ -411,47 +414,83 @@ class TabSummarizer {
       let betterTitle = tab.title;
 
       try {
-        // Check if Chrome's built-in AI APIs are available
-        if (typeof ai !== 'undefined' && ai.summarizer) {
+        // Check if Chrome's built-in Summarizer API is available
+        if (typeof Summarizer !== 'undefined') {
           console.log('Using Chrome Summarizer API');
-          summary = await ai.summarizer.summarize(pageText, {
-            type: "key-points",
-            length: "short",
-            outputLanguage: "en"
-          });
           
-          // Validate the AI response
-          if (!summary || summary.trim().length === 0) {
-            throw new Error('Empty response from AI API');
+          // Check availability
+          const availability = await Summarizer.availability();
+          if (availability === 'available' || availability === 'downloadable') {
+            const summarizer = await Summarizer.create({
+              type: 'tldr',
+              length: 'short',
+              format: 'plain-text',
+              outputLanguage: 'en'
+            });
+            
+            summary = await summarizer.summarize(pageText, {
+              context: `This is content from a web page titled "${tab.title}" on ${new URL(tab.url).hostname}.`
+            });
+            
+            // Clean up the summarizer
+            summarizer.destroy();
+            
+            // Validate the AI response
+            if (!summary || summary.trim().length === 0) {
+              throw new Error('Empty response from Summarizer API');
+            }
+          } else {
+            throw new Error('Summarizer API unavailable');
           }
         } else {
-          console.log('Chrome AI APIs not available, using enhanced fallback');
-          summary = this.generateSummaryFromMetadata(tab, pageText);
+          console.log('Chrome Summarizer API not available, trying Writer API for enhanced summary');
+          // Try Writer API as fallback for enhanced summary generation
+          summary = await this.generateEnhancedSummaryWithWriter(tab, pageText);
         }
       } catch (error) {
         console.warn('Summarizer API failed:', error.message);
-        summary = this.generateSummaryFromMetadata(tab, pageText);
+        // Try Writer API as fallback for enhanced summary generation
+        summary = await this.generateEnhancedSummaryWithWriter(tab, pageText);
       }
 
       try {
-        // Check if Chrome's built-in Rewriter API is available
-        if (typeof ai !== 'undefined' && ai.rewriter) {
-          console.log('Using Chrome Rewriter API');
-          betterTitle = await ai.rewriter.rewrite(tab.title, {
-            tone: "clear",
-            style: "concise"
-          });
+        // Check if Chrome's built-in Writer API is available (includes Rewriter functionality)
+        if (typeof Writer !== 'undefined') {
+          console.log('Using Chrome Writer API for title rewriting');
           
-          // Validate the AI response
-          if (!betterTitle || betterTitle.trim().length === 0) {
-            throw new Error('Empty response from Rewriter API');
+          // Check availability
+          const availability = await Writer.availability();
+          if (availability === 'available' || availability === 'downloadable') {
+            const writer = await Writer.create({
+              tone: 'neutral',
+              format: 'plain-text',
+              length: 'short'
+            });
+            
+            // Use the Writer API to improve the title
+            betterTitle = await writer.write(
+              `Rewrite this tab title to be clearer and more descriptive: "${tab.title}"`,
+              {
+                context: `This is a browser tab title from ${new URL(tab.url).hostname}. Make it concise and descriptive.`
+              }
+            );
+            
+            // Clean up the writer
+            writer.destroy();
+            
+            // Validate the AI response
+            if (!betterTitle || betterTitle.trim().length === 0) {
+              throw new Error('Empty response from Writer API');
+            }
+          } else {
+            throw new Error('Writer API unavailable');
           }
         } else {
-          console.log('Chrome Rewriter API not available, using enhanced title generation');
+          console.log('Chrome Writer API not available, using enhanced title generation');
           betterTitle = this.generateBetterTitle(tab);
         }
       } catch (error) {
-        console.warn('Rewriter API failed:', error.message);
+        console.warn('Writer API failed:', error.message);
         betterTitle = this.generateBetterTitle(tab);
       }
 
@@ -647,6 +686,43 @@ class TabSummarizer {
     }
     
     return cleanTitle || title; // Fallback to original title if cleaning failed
+  }
+
+  async generateEnhancedSummaryWithWriter(tab, pageText) {
+    try {
+      // Check if Chrome's built-in Writer API is available
+      if (typeof Writer !== 'undefined') {
+        console.log('Using Chrome Writer API for enhanced summary generation');
+        
+        // Check availability
+        const availability = await Writer.availability();
+        if (availability === 'available' || availability === 'downloadable') {
+          const writer = await Writer.create({
+            tone: 'neutral',
+            format: 'plain-text',
+            length: 'short',
+            sharedContext: `This is content from a web page titled "${tab.title}" on ${new URL(tab.url).hostname}.`
+          });
+          
+          const enhancedSummary = await writer.write(
+            `Create a concise, informative summary of this web page content: ${pageText.slice(0, 1000)}`,
+            {
+              context: `Focus on the main points and purpose of this ${this.detectPageType(tab.url, tab.title)} page.`
+            }
+          );
+          
+          // Clean up the writer
+          writer.destroy();
+          
+          return enhancedSummary.trim();
+        }
+      }
+    } catch (error) {
+      console.warn('Writer API for enhanced summary failed:', error.message);
+    }
+    
+    // Fallback to existing method
+    return this.generateSummaryFromMetadata(tab, pageText);
   }
 
   displayResults() {

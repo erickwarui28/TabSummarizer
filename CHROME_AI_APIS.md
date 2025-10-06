@@ -45,41 +45,95 @@ When the Summarizer API is unavailable or fails:
 
 ---
 
-### 2. Rewriter API
+### 2. Writer API (includes Rewriter functionality)
 
 **Status**: ✅ Implemented  
-**Chrome Version**: Available from Chrome 138 stable (Extensions)  
-**Documentation**: [Chrome Rewriter API](https://developer.chrome.com/docs/ai/built-in-apis#writer_and_rewriter_apis)
+**Chrome Version**: Available from Chrome 137+ (Origin Trial)  
+**Documentation**: [Chrome Writer API](https://developer.chrome.com/docs/ai/writer-api)
 
 #### Implementation Details
 
 ```javascript
 // Location: popup.js - processTab() method
-if (typeof ai !== 'undefined' && ai.rewriter) {
-  console.log('Using Chrome Rewriter API');
-  betterTitle = await ai.rewriter.rewrite(tab.title, {
-    tone: "clear",
-    style: "concise"
-  });
+if (typeof Writer !== 'undefined') {
+  console.log('Using Chrome Writer API for title rewriting');
+  
+  // Check availability
+  const availability = await Writer.availability();
+  if (availability === 'available' || availability === 'downloadable') {
+    const writer = await Writer.create({
+      tone: 'neutral',
+      format: 'plain-text',
+      length: 'short'
+    });
+    
+    // Use the Writer API to improve the title
+    betterTitle = await writer.write(
+      `Rewrite this tab title to be clearer and more descriptive: "${tab.title}"`,
+      {
+        context: `This is a browser tab title from ${new URL(tab.url).hostname}. Make it concise and descriptive.`
+      }
+    );
+    
+    // Clean up the writer
+    writer.destroy();
+  }
 }
 ```
 
 #### Configuration Options
-- **tone**: `"clear"` - Makes titles more understandable
-- **style**: `"concise"` - Removes unnecessary words
+- **tone**: `'neutral'` - Writing tone (formal, neutral, casual)
+- **format**: `'plain-text'` - Output format (markdown, plain-text)
+- **length**: `'short'` - Output length (short, medium, long)
+- **sharedContext**: Context shared across multiple writing tasks
 
 #### Use Cases in TabSummarizer
 - Improve confusing or unclear tab titles
-- Remove redundant site names and prefixes
+- Generate enhanced summaries using Writer API
 - Create more descriptive titles for better organization
 - Enhance readability for users with many open tabs
+- Provide fallback content generation when Summarizer API fails
 
 #### Fallback Strategy
-When the Rewriter API is unavailable or fails:
+When the Writer API is unavailable or fails:
 - Uses intelligent title cleaning algorithms
 - Removes common patterns like "Site Name - " prefixes
 - Truncates overly long titles intelligently
 - Adds contextual prefixes based on page type
+
+#### Enhanced Summary Generation
+
+The Writer API is also used as a fallback for enhanced summary generation when the Summarizer API is unavailable:
+
+```javascript
+// Location: popup.js - generateEnhancedSummaryWithWriter() method
+async generateEnhancedSummaryWithWriter(tab, pageText) {
+  if (typeof Writer !== 'undefined') {
+    const availability = await Writer.availability();
+    if (availability === 'available' || availability === 'downloadable') {
+      const writer = await Writer.create({
+        tone: 'neutral',
+        format: 'plain-text',
+        length: 'short',
+        sharedContext: `This is content from a web page titled "${tab.title}" on ${new URL(tab.url).hostname}.`
+      });
+      
+      const enhancedSummary = await writer.write(
+        `Create a concise, informative summary of this web page content: ${pageText.slice(0, 1000)}`,
+        {
+          context: `Focus on the main points and purpose of this ${this.detectPageType(tab.url, tab.title)} page.`
+        }
+      );
+      
+      writer.destroy();
+      return enhancedSummary.trim();
+    }
+  }
+  
+  // Fallback to existing method
+  return this.generateSummaryFromMetadata(tab, pageText);
+}
+```
 
 ---
 
@@ -162,9 +216,8 @@ async searchWithPromptAPI(query) {
 | API | Web Apps | Extensions | Chrome Version | Status in TabSummarizer |
 |-----|----------|------------|----------------|------------------------|
 | Summarizer API | ✅ Stable | ✅ Stable | 138+ | ✅ Implemented |
-| Rewriter API | 🔄 Origin Trial | ✅ Stable | 138+ | ✅ Implemented |
+| Writer API | 🔄 Origin Trial | 🔄 Origin Trial | 137+ | ✅ Implemented |
 | Prompt API | 🔄 Origin Trial | ✅ Stable | 138+ | ✅ Implemented |
-| Writer API | 🔄 Origin Trial | 🔄 Origin Trial | 138+ | ❌ Not Used |
 | Translator API | ✅ Stable | ✅ Stable | 138+ | ❌ Not Used |
 | Language Detector API | ✅ Stable | ✅ Stable | 138+ | ❌ Not Used |
 | Proofreader API | 🔄 Origin Trial | 🔄 Origin Trial | 138+ | ❌ Not Used |
@@ -183,17 +236,24 @@ async searchWithPromptAPI(query) {
 ```javascript
 // Robust error handling pattern used throughout
 try {
-  if (typeof ai !== 'undefined' && ai.summarizer) {
-    // Use Chrome AI API
-    result = await ai.summarizer.summarize(content, options);
-    
-    // Validate response
-    if (!result || result.trim().length === 0) {
-      throw new Error('Empty response from AI API');
+  if (typeof Summarizer !== 'undefined') {
+    // Use Chrome Summarizer API
+    const availability = await Summarizer.availability();
+    if (availability === 'available' || availability === 'downloadable') {
+      const summarizer = await Summarizer.create(options);
+      result = await summarizer.summarize(content, context);
+      summarizer.destroy();
+      
+      // Validate response
+      if (!result || result.trim().length === 0) {
+        throw new Error('Empty response from Summarizer API');
+      }
+    } else {
+      throw new Error('Summarizer API unavailable');
     }
   } else {
-    // Fallback to metadata-based processing
-    result = this.generateSummaryFromMetadata(tab, content);
+    // Fallback to Writer API or metadata-based processing
+    result = await this.generateEnhancedSummaryWithWriter(tab, content);
   }
 } catch (error) {
   console.warn('AI API failed:', error.message);
@@ -203,9 +263,10 @@ try {
 
 ### Fallback Mechanisms
 
-1. **Primary**: Chrome Built-in AI APIs
-2. **Secondary**: Enhanced metadata-based generation
-3. **Tertiary**: Basic text extraction and cleaning
+1. **Primary**: Chrome Summarizer API
+2. **Secondary**: Chrome Writer API (for enhanced summaries and title rewriting)
+3. **Tertiary**: Enhanced metadata-based generation
+4. **Quaternary**: Basic text extraction and cleaning
 
 ### Performance Considerations
 
@@ -249,9 +310,9 @@ try {
 ```javascript
 // Console logging for debugging
 console.log('Chrome AI APIs available:', {
-  summarizer: typeof ai?.summarizer !== 'undefined',
-  rewriter: typeof ai?.rewriter !== 'undefined',
-  prompt: typeof ai?.prompt !== 'undefined'
+  summarizer: typeof Summarizer !== 'undefined',
+  writer: typeof Writer !== 'undefined',
+  prompt: typeof LanguageModel !== 'undefined'
 });
 ```
 
@@ -274,20 +335,20 @@ console.log('Chrome AI APIs available:', {
 
 ### Planned API Integrations
 
-1. **Prompt API Integration**
-   - Natural language tab search
-   - Advanced clustering algorithms
-   - Context-aware recommendations
+1. **Streaming Support**
+   - Implement streaming responses for better user experience
+   - Real-time content generation updates
+   - Progressive loading of summaries
 
 2. **Language Detector API**
    - Multi-language content detection
    - Automatic language-specific processing
    - International user support
 
-3. **Writer API**
-   - Generate tab descriptions
-   - Create custom summaries
-   - Enhanced content creation
+3. **Enhanced Writer API Features**
+   - Streaming content generation
+   - Multiple output formats (markdown, structured)
+   - Advanced context sharing across tasks
 
 ### Performance Optimizations
 
@@ -319,7 +380,7 @@ console.log('Chrome AI APIs available:', {
 
 TabSummarizer successfully leverages Chrome's built-in AI APIs to provide intelligent tab management while maintaining user privacy through on-device processing. The implementation includes robust error handling, comprehensive fallback mechanisms, and a clear path for future enhancements.
 
-The combination of the Summarizer and Rewriter APIs creates a powerful foundation for tab organization, with planned integration of the Prompt API to provide even more advanced natural language capabilities.
+The combination of the Summarizer API, Writer API, and Prompt API creates a powerful foundation for tab organization, providing intelligent summarization, enhanced title rewriting, and natural language search capabilities. The Writer API serves as both a title enhancement tool and a fallback for content generation when the Summarizer API is unavailable.
 
 ---
 
