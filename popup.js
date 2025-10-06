@@ -765,8 +765,10 @@ class TabSummarizer {
           </div>
         `;
       } else {
+        const count = searchResults.length;
+        const countText = count === 1 ? '1 tab' : `${count} tabs`;
         output.innerHTML = `
-          <div class="cluster-header">Search Results for "${query}"</div>
+          <div class="cluster-header">Search Results for "${query}" (${countText} found)</div>
           ${searchResults.map(item => this.renderTabItem(item)).join('')}
         `;
       }
@@ -783,8 +785,10 @@ class TabSummarizer {
           </div>
         `;
       } else {
+        const count = searchResults.length;
+        const countText = count === 1 ? '1 tab' : `${count} tabs`;
         output.innerHTML = `
-          <div class="cluster-header">Search Results for "${query}" (Basic Search)</div>
+          <div class="cluster-header">Search Results for "${query}" (${countText} found - Basic Search)</div>
           ${searchResults.map(item => this.renderTabItem(item)).join('')}
         `;
       }
