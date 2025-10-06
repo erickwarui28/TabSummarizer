@@ -71,7 +71,8 @@ class TabSummarizer {
             const summarizer = await Summarizer.create({
               type: 'tldr',
               length: 'short',
-              format: 'plain-text'
+              format: 'plain-text',
+              outputLanguage: 'en'
             });
             
             briefSummary = await summarizer.summarize(tabInfo, {
@@ -370,7 +371,8 @@ class TabSummarizer {
           console.log('Using Chrome Summarizer API');
           summary = await ai.summarizer.summarize(pageText, {
             type: "key-points",
-            length: "short"
+            length: "short",
+            outputLanguage: "en"
           });
           
           // Validate the AI response
