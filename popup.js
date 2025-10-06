@@ -46,8 +46,23 @@ class TabSummarizer {
   async generateBriefSummary(tabs) {
     const output = document.getElementById('output');
     
-    // Show loading state
-    output.innerHTML = '<div class="empty-state"><div class="icon">...</div>Generating summary...</div>';
+    // Show loading state for brief summary only
+    output.innerHTML = `
+      <div class="brief-summary">
+        <div class="summary-header">[Summary] Brief Overview</div>
+        <div class="summary-text loading">Generating summary...</div>
+      </div>
+    `;
+
+    // Store tabs for display
+    this.tabs = tabs;
+    this.summaries = [];
+    
+    // Process tabs to get summaries for display and show them immediately
+    await this.processAllTabsForDisplay();
+    
+    // Display tabs immediately while brief summary is still loading
+    this.displayTabsImmediately();
 
     try {
       // Prepare tab information for summarization
@@ -90,19 +105,12 @@ class TabSummarizer {
         briefSummary = this.generateFallbackBriefSummary(tabs);
       }
 
-      // Store tabs for display
-      this.tabs = tabs;
-      this.summaries = [];
-      
-      // Process tabs to get summaries for display
-      await this.processAllTabsForDisplay();
-      
-      // Display the brief summary and tabs
-      this.displayBriefSummaryWithTabs(briefSummary);
+      // Update the brief summary when it's ready
+      this.updateBriefSummary(briefSummary);
 
     } catch (error) {
       console.error('Error generating brief summary:', error);
-      this.showError('Failed to generate summary. Please try again.');
+      this.updateBriefSummary('Failed to generate summary. Please try again.');
     }
   }
 
@@ -211,6 +219,43 @@ class TabSummarizer {
         summary: 'Error processing this tab',
         betterTitle: tab.title
       };
+    }
+  }
+
+  displayTabsImmediately() {
+    const output = document.getElementById('output');
+    
+    // Create the tabs section and append to existing brief summary
+    let tabsHTML = '';
+    if (this.summaries.length > 0) {
+      // Group similar tabs (basic clustering)
+      const clusters = this.clusterTabs();
+      
+      if (clusters.length > 1) {
+        // Show clustered results
+        clusters.forEach(cluster => {
+          tabsHTML += `
+            <div class="tab-cluster">
+              <div class="cluster-header">${cluster.category}</div>
+              ${cluster.tabs.map(item => this.renderTabItem(item)).join('')}
+            </div>
+          `;
+        });
+      } else {
+        // Show flat list
+        tabsHTML = this.summaries.map(item => this.renderTabItem(item)).join('');
+      }
+    }
+    
+    // Append tabs to the existing output (which already has the brief summary loading state)
+    output.innerHTML += tabsHTML;
+  }
+
+  updateBriefSummary(briefSummary) {
+    const summaryTextElement = document.querySelector('.summary-text');
+    if (summaryTextElement) {
+      summaryTextElement.textContent = briefSummary;
+      summaryTextElement.classList.remove('loading');
     }
   }
 
